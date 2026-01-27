@@ -1,6 +1,6 @@
 // Student Helper Chatbot - Professional Frontend JS
 
-const API_URL = 'http://localhost:5000';
+const API_URL = ''; // Use relative path for Vercel
 let sessionId = generateSessionId();
 let isWaitingForResponse = false;
 

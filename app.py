@@ -24,7 +24,7 @@ from tools import (
 load_dotenv()
 
 # Initialize Flask app
-app = Flask(__name__)
+app = Flask(__name__, static_url_path='', static_folder='static')
 CORS(app)  # Enable CORS for frontend access
 
 # Global chatbot instance
@@ -91,14 +91,8 @@ Be patient, encouraging, and remember that your goal is to help them LEARN, not 
 
 @app.route('/')
 def home():
-    """Home endpoint."""
-    return jsonify({
-        "message": "Student Helper Chatbot API is running!",
-        "endpoints": {
-            "/chat": "POST - Send a message to the chatbot",
-            "/reset": "POST - Reset conversation history"
-        }
-    })
+    """Home endpoint - Serves the frontend."""
+    return app.send_static_file('index.html')
 
 
 @app.route('/chat', methods=['POST'])
