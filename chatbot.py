@@ -3,7 +3,7 @@ from dotenv import load_dotenv
 from langchain_groq import ChatGroq
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from langchain.agents import AgentExecutor, create_openai_tools_agent
-from langchain import hub
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 
 # Import all tools
 from tools import (
@@ -18,7 +18,37 @@ from tools import (
 # Load environment variables
 load_dotenv()
 
-chatbot_graph = None  # global chatbot instance
+chatbot_instance = None  # global chatbot instance
+
+
+class WrappedAgent:
+    """Wraps AgentExecutor to provide a graph-like invoke interface."""
+    def __init__(self, executor):
+        self.executor = executor
+
+    def invoke(self, inputs):
+        """
+        Expects {"messages": [HumanMessage, ...]}
+        Returns {"messages": [HumanMessage, ..., AIMessage]}
+        """
+        messages = inputs.get("messages", [])
+        if not messages:
+            return {"messages": []}
+
+        # Last message is the current input
+        current_input = messages[-1].content
+        # Rest is history
+        chat_history = messages[:-1]
+
+        # Invoke executor
+        result = self.executor.invoke({
+            "input": current_input,
+            "chat_history": chat_history
+        })
+
+        # Append AI response to messages
+        ai_msg = AIMessage(content=result["output"])
+        return {"messages": messages + [ai_msg]}
 
 
 def initialize_chatbot():
@@ -65,13 +95,11 @@ When a student asks a question:
 
 Be patient, encouraging, and remember that your goal is to help them LEARN, not just give answers!"""
 
-    # Get the prompt from hub or create one
-    # For simplicity and reliability on Vercel, we'll use a fixed prompt template
-    from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-    
+    # Create the prompt template
     prompt = ChatPromptTemplate.from_messages([
         ("system", system_prompt_text),
-        MessagesPlaceholder(variable_name="messages"),
+        MessagesPlaceholder(variable_name="chat_history"),
+        ("human", "{input}"),
         MessagesPlaceholder(variable_name="agent_scratchpad"),
     ])
 
@@ -79,30 +107,35 @@ Be patient, encouraging, and remember that your goal is to help them LEARN, not 
     agent = create_openai_tools_agent(llm, tools, prompt)
 
     # Create the executor
-    agent_executor = AgentExecutor(agent=agent, tools=tools, verbose=True)
+    executor = AgentExecutor(agent=agent, tools=tools, verbose=True)
 
-    return agent_executor
+    return WrappedAgent(executor)
 
 
 def get_chatbot():
-    """Lazily initialize or return the chatbot graph."""
-    global chatbot_graph
+    """Lazily initialize or return the chatbot instance."""
+    global chatbot_instance
     
-    if chatbot_graph is None:
+    if chatbot_instance is None:
         print("⚙️ Initializing chatbot...")
-        chatbot_graph = initialize_chatbot()
+        chatbot_instance = initialize_chatbot()
         print("✅ Chatbot initialized")
         
-    return chatbot_graph
+    return chatbot_instance
 
 
 if __name__ == "__main__":
     # Simple CLI test
-    executor = get_chatbot()
+    chatbot = get_chatbot()
     print("Chatbot ready for testing!")
     while True:
-        user_input = input("You: ")
-        if user_input.lower() in ['exit', 'quit']:
+        try:
+            user_input = input("You: ")
+            if user_input.lower() in ['exit', 'quit']:
+                break
+            response = chatbot.invoke({"messages": [HumanMessage(content=user_input)]})
+            print(f"Bot: {response['messages'][-1].content}")
+        except KeyboardInterrupt:
             break
-        response = executor.invoke({"messages": [HumanMessage(content=user_input)]})
-        print(f"Bot: {response['output']}")
+        except Exception as e:
+            print(f"Error: {e}")

@@ -5,6 +5,7 @@ from chatbot import get_chatbot
 from langchain_core.messages import HumanMessage, AIMessage
 
 # Initialize Flask app
+# Serve static files from the 'static' folder at the root path
 app = Flask(__name__, static_url_path='', static_folder='static')
 CORS(app)  # Enable CORS for frontend access
 
@@ -13,7 +14,7 @@ memory_store = {}  # session memory
 
 @app.route("/")
 def home():
-    """Home endpoint - Serves the frontend."""
+    """Home endpoint - Serves the frontend UI."""
     return app.send_static_file('index.html')
 
 
@@ -21,7 +22,7 @@ def home():
 def chat():
     """Handle chat messages from the frontend."""
     try:
-        # ✅ API KEY CHECK (IMPORTANT)
+        # ✅ API KEY CHECK
         if not os.getenv("GROQ_API_KEY"):
             return jsonify({
                 "error": "GROQ_API_KEY is missing. Please set it in Vercel environment variables."
@@ -34,29 +35,26 @@ def chat():
         if not user_message:
             return jsonify({"error": "Message is required"}), 400
 
-        # ✅ Session memory (Convert history back to LangChain messages if needed)
-        # Note: we save the full message list in memory_store
+        # ✅ Session memory
         history = memory_store.get(session_id, [])
+        # We only need to pass history to the chatbot; it will handle the new message if we include it
         history.append(HumanMessage(content=user_message))
 
         # ✅ Lazy chatbot init
-        executor = get_chatbot()
+        chatbot = get_chatbot()
 
-        # ✅ Invoke chatbot
-        # The AgentExecutor returns a dict with 'output' and 'intermediate_steps'
-        response = executor.invoke({"messages": history})
+        # ✅ Invoke chatbot (returns full message list in "messages" key)
+        response = chatbot.invoke({"messages": history})
+
+        # Extra memory update
+        memory_store[session_id] = response["messages"]
         
-        # Extract the AI message content
-        ai_message_text = response["output"]
-
-        # Update history with the new messages
-        # We need to manually add the AI response to history for next time
-        history.append(AIMessage(content=ai_message_text))
-        memory_store[session_id] = history
+        ai_message_text = response["messages"][-1].content
 
         return jsonify({
             "response": ai_message_text,
-            "session_id": session_id
+            "session_id": session_id,
+            "reply": ai_message_text  # Including both keys for compatibility
         })
 
     except Exception as e:
@@ -64,7 +62,7 @@ def chat():
         traceback.print_exc()
 
         error_msg = str(e)
-        if "API key" in error_msg:
+        if "API key" in error_msg.lower():
             error_msg = "Invalid or missing API key. Check your GROQ_API_KEY."
 
         return jsonify({"error": error_msg}), 500
