@@ -32,6 +32,14 @@ chatbot_graph = None
 memory_store = {}
 
 
+def get_chatbot():
+    """Lazily initialize or return the chatbot graph."""
+    global chatbot_graph
+    if chatbot_graph is None:
+        chatbot_graph = initialize_chatbot()
+    return chatbot_graph
+
+
 def initialize_chatbot():
     """Initialize the LangChain chatbot agent graph."""
     global chatbot_graph
@@ -99,6 +107,10 @@ def home():
 def chat():
     """Handle chat messages from the frontend."""
     try:
+        # Check for API key first
+        if not os.getenv("GROQ_API_KEY"):
+            return jsonify({"error": "GROQ_API_KEY is missing. Please set it in Vercel environment variables."}), 500
+
         data = request.json
         user_message = data.get('message', '')
         session_id = data.get('session_id', 'default')
@@ -115,8 +127,11 @@ def chat():
         # Add user message to history
         history.append(HumanMessage(content=user_message))
         
+        # Get the chatbot (initializes if necessary)
+        graph = get_chatbot()
+        
         # Get response from chatbot graph
-        response = chatbot_graph.invoke({"messages": history})
+        response = graph.invoke({"messages": history})
         
         # Extract AI message
         ai_message = response["messages"][-1]
@@ -133,8 +148,10 @@ def chat():
     except Exception as e:
         import traceback
         traceback.print_exc()
-        print(f"Error: {str(e)}")
-        return jsonify({"error": str(e)}), 500
+        error_msg = str(e)
+        if "API key" in error_msg:
+            error_msg = "Invalid or missing API key. Check your GROQ_API_KEY."
+        return jsonify({"error": error_msg}), 500
 
 
 @app.route('/reset', methods=['POST'])
@@ -155,8 +172,11 @@ def reset():
 
 if __name__ == '__main__':
     print("Initializing Student Helper Chatbot...")
-    chatbot_graph = initialize_chatbot()
-    print("Chatbot initialized successfully!")
+    try:
+        get_chatbot()
+        print("Chatbot initialized successfully!")
+    except Exception as e:
+        print(f"Initial initialization failed (this is okay if API key is missing locally): {e}")
     print("\n" + "=" * 70)
     print("Starting Flask server...")
     print("Frontend can connect to: http://localhost:5000")
