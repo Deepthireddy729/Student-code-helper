@@ -63,7 +63,8 @@ async function sendMessage() {
         if (response.ok) {
             appendMessage(data.response, 'bot');
         } else {
-            appendMessage('Wait, I hit a snag. The AI server returned an error.', 'bot', true);
+            const errorMsg = data.error || 'The AI server returned an error.';
+            appendMessage(`Wait, I hit a snag. ${errorMsg}`, 'bot', true);
         }
     } catch (error) {
         hideTypingIndicator();
