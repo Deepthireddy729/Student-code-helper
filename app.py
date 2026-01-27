@@ -1,7 +1,11 @@
 import os
+from dotenv import load_dotenv
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from langchain_core.messages import HumanMessage, AIMessage
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Initialize Flask app
 # Serve static files from the 'static' folder at the root path
