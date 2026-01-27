@@ -2,7 +2,11 @@ import os
 from dotenv import load_dotenv
 from langchain_groq import ChatGroq
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
-from langchain.agents import AgentExecutor, create_openai_tools_agent
+try:
+    from langchain.agents import AgentExecutor, create_openai_tools_agent
+except ImportError:
+    from langchain.agents import AgentExecutor as AgentExecutor
+    from langchain.agents import create_openai_tools_agent as create_openai_tools_agent
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 
 # Import all tools
@@ -113,14 +117,12 @@ Be patient, encouraging, and remember that your goal is to help them LEARN, not 
 
 
 def get_chatbot():
-    """Lazily initialize or return the chatbot instance."""
+    """Return the chatbot instance."""
     global chatbot_instance
-    
+
     if chatbot_instance is None:
-        print("⚙️ Initializing chatbot...")
-        chatbot_instance = initialize_chatbot()
-        print("✅ Chatbot initialized")
-        
+        raise RuntimeError("Chatbot not initialized. Call initialize_chatbot() first.")
+
     return chatbot_instance
 
 

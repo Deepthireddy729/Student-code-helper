@@ -1,7 +1,6 @@
 import os
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-from chatbot import get_chatbot
 from langchain_core.messages import HumanMessage, AIMessage
 
 # Initialize Flask app
@@ -10,6 +9,32 @@ app = Flask(__name__, static_url_path='', static_folder='static')
 CORS(app)  # Enable CORS for frontend access
 
 memory_store = {}  # session memory
+
+# Initialize chatbot at startup to avoid first-request delay
+def initialize_app():
+    """Initialize the application including chatbot."""
+    try:
+        # Validate API key at startup
+        api_key = os.getenv("GROQ_API_KEY")
+        if not api_key:
+            raise ValueError("GROQ_API_KEY is missing! Please set it in environment variables.")
+
+        if len(api_key.strip()) < 10:  # Basic validation
+            raise ValueError("GROQ_API_KEY appears to be invalid. Please check your API key.")
+
+        print("🔑 API key validated successfully")
+        print("⚙️ Initializing chatbot...")
+        from chatbot import initialize_chatbot
+        global chatbot_instance
+        chatbot_instance = initialize_chatbot()
+        print("✅ Chatbot initialized and ready")
+
+    except Exception as e:
+        print(f"❌ Failed to initialize chatbot: {e}")
+        raise
+
+# Initialize at import time
+initialize_app()
 
 
 @app.route("/")
@@ -40,8 +65,8 @@ def chat():
         # We only need to pass history to the chatbot; it will handle the new message if we include it
         history.append(HumanMessage(content=user_message))
 
-        # ✅ Lazy chatbot init
-        chatbot = get_chatbot()
+        # Use pre-initialized chatbot
+        chatbot = chatbot_instance
 
         # ✅ Invoke chatbot (returns full message list in "messages" key)
         response = chatbot.invoke({"messages": history})
